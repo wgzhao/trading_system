@@ -13,7 +13,10 @@ import numpy as np
 import pandas as pd
 
 from event import MarketEvent
-
+try:
+    import tushare
+except ImportError:
+    raise ImportError("install tushare module first")
 
 class DataHandler(object):
     """
@@ -131,6 +134,157 @@ class HistoricCSVDataHandler(DataHandler):
 
         ## add new code to make sure the dtype correct
             self.symbol_data[s] = self.symbol_data[s].convert_objects(convert_numeric=True)
+            # Combine the index to pad forward values
+            if comb_index is None:
+                comb_index = self.symbol_data[s].index
+            else:
+                comb_index.union(self.symbol_data[s].index)
+
+            # Set the latest symbol_data to None
+            self.latest_symbol_data[s] = []
+
+        for s in self.symbol_list:
+            self.symbol_data[s] = self.symbol_data[s].reindex(
+                index=comb_index, method='pad'
+            )
+            self.symbol_data[s]["returns"] = self.symbol_data[s]["adj_close"].pct_change()
+            self.symbol_data[s] = self.symbol_data[s].iterrows()
+
+    def _get_new_bar(self, symbol):
+        """
+        Returns the latest bar from the data feed.
+        """
+        for b in self.symbol_data[symbol]:
+            yield b
+
+    def get_latest_bar(self, symbol):
+        """
+        Returns the last bar from the latest_symbol list.
+        """
+        try:
+            bars_list = self.latest_symbol_data[symbol]
+        except KeyError:
+            print("That symbol is not available in the historical data set.")
+            raise
+        else:
+            return bars_list[-1]
+
+    def get_latest_bars(self, symbol, N=1):
+        """
+        Returns the last N bars from the latest_symbol list,
+        or N-k if less available.
+        """
+        try:
+            bars_list = self.latest_symbol_data[symbol]
+        except KeyError:
+            print("That symbol is not available in the historical data set.")
+            raise
+        else:
+            return bars_list[-N:]
+
+    def get_latest_bar_datetime(self, symbol):
+        """
+        Returns a Python datetime object for the last bar.
+        """
+        try:
+            bars_list = self.latest_symbol_data[symbol]
+        except KeyError:
+            print("That symbol is not available in the historical data set.")
+            raise
+        else:
+            return bars_list[-1][0]
+
+    def get_latest_bar_value(self, symbol, val_type):
+        """
+        Returns one of the Open, High, Low, Close, Volume or OI
+        values from the pandas Bar series object.
+        """
+        try:
+            bars_list = self.latest_symbol_data[symbol]
+        except KeyError:
+            print("That symbol is not available in the historical data set.")
+            raise
+        else:
+            return getattr(bars_list[-1][1], val_type)
+
+    def get_latest_bars_values(self, symbol, val_type, N=1):
+        """
+        Returns the last N bar values from the 
+        latest_symbol list, or N-k if less available.
+        """
+        try:
+            bars_list = self.get_latest_bars(symbol, N)
+        except KeyError:
+            print("That symbol is not available in the historical data set.")
+            raise
+        else:
+            return np.array([getattr(b[1], val_type) for b in bars_list])
+
+    def update_bars(self):
+        """
+        Pushes the latest bar to the latest_symbol_data structure
+        for all symbols in the symbol list.
+        """
+        for s in self.symbol_list:
+            try:
+                bar = next(self._get_new_bar(s))
+            except StopIteration:
+                self.continue_backtest = False
+            else:
+                if bar is not None:
+                    self.latest_symbol_data[s].append(bar)
+        self.events.put(MarketEvent())
+
+
+class HistoricAPIDataHandler(DataHandler):
+    """
+    HistoricAPIDataHandler is designed to get stock info for
+    each requested symbol from tushare module API and provide an interface
+    to obtain the "latest" bar in a manner identical to a live
+    trading interface. 
+    """
+    def __init__(self, events, symbol_list, start_date, end_date):
+        """
+        Initialises the historic data handler by requesting
+        the tushare API and a list of symbols.
+
+        It will be assumed that  symbol is a string in the list.
+
+        Parameters:
+        events - The Event Queue.
+        symbol_list - A list of symbol strings.
+        """
+        self.events = events
+        self.symbol_list = symbol_list
+        self.start_date = start_date
+        self.end_date = end_date
+
+        self.symbol_data = {}
+        self.latest_symbol_data = {}
+        self.continue_backtest = True       
+        self.bar_index = 0
+
+        self._get_stock_from_api()
+
+    def _get_stock_from_api(self):
+        """
+        get data with pandas DataFrames format within a symbol dictionary.
+
+        For this handler it will be assumed that the data is
+        taken from tushare api. Thus its format will be respected.
+        """
+        comb_index = None
+        for s in self.symbol_list:
+            # get data with no header information, indexed on date
+            df = tushare.get_k_data(s, start=self.start_date, end=self.end_date, ktype='D')
+            df['adj_close'] = df['close']
+            df.set_index('date', inplace=True)
+            df.index.rename('datetime', inplace=True)
+            df.index = pd.to_datetime(df.index)
+            ## add new code to make sure the dtype correct
+            #df = df.sort_index().convert_objects(convert_numeric=True)
+            self.symbol_data[s] = df
+
             # Combine the index to pad forward values
             if comb_index is None:
                 comb_index = self.symbol_data[s].index

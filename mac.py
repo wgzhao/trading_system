@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # mac.py
@@ -14,10 +14,10 @@ import statsmodels.api as sm
 from strategy import Strategy
 from event import SignalEvent
 from backtest import Backtest
-from data import HistoricCSVDataHandler
+from data import HistoricAPIDataHandler
 from execution import SimulatedExecutionHandler
 from portfolio import Portfolio
-
+import sys
 
 class MovingAverageCrossStrategy(Strategy):
     """
@@ -95,15 +95,17 @@ class MovingAverageCrossStrategy(Strategy):
 
 
 if __name__ == "__main__":
-    csv_dir = 'D:/prepare_for_test/my_strading/mac'  # CHANGE THIS!
-    symbol_list = ['AAPL']
+    if len(sys.argv) > 1:
+        symbol_list = sys.argv[1].split(' ')
+    else:
+        symbol_list = ['601166']
     initial_capital = 100000.0
     heartbeat = 0.0
-    start_date = datetime.datetime(1990, 1, 1, 0, 0, 0)
-
+    start_date = '1992-01-01'
+    end_date = '2018-02-20'
     backtest = Backtest(
-        csv_dir, symbol_list, initial_capital, heartbeat, 
-        start_date, HistoricCSVDataHandler, SimulatedExecutionHandler, 
+        symbol_list, initial_capital, heartbeat, 
+        start_date, end_date, HistoricAPIDataHandler, SimulatedExecutionHandler, 
         Portfolio, MovingAverageCrossStrategy
     )
     backtest.simulate_trading()

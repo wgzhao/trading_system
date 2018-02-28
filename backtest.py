@@ -21,15 +21,14 @@ class Backtest(object):
     """
 
     def __init__(
-        self, csv_dir, symbol_list, initial_capital,
-        heartbeat, start_date, data_handler, 
+        self, symbol_list, initial_capital,
+        heartbeat, start_date, end_date, data_handler, 
         execution_handler, portfolio, strategy
     ):
         """
         Initialises the backtest.
 
         Parameters:
-        csv_dir - The hard root to the CSV data directory.
         symbol_list - The list of symbol strings.
         intial_capital - The starting capital for the portfolio.
         heartbeat - Backtest "heartbeat" in seconds
@@ -39,11 +38,11 @@ class Backtest(object):
         portfolio - (Class) Keeps track of portfolio current and prior positions.
         strategy - (Class) Generates signals based on market data.
         """
-        self.csv_dir = csv_dir
         self.symbol_list = symbol_list
         self.initial_capital = initial_capital
         self.heartbeat = heartbeat
         self.start_date = start_date
+        self.end_date = end_date
 
         self.data_handler_cls = data_handler
         self.execution_handler_cls = execution_handler
@@ -67,7 +66,7 @@ class Backtest(object):
         print(
             "Creating DataHandler, Strategy, Portfolio and ExecutionHandler"
         )
-        self.data_handler = self.data_handler_cls(self.events, self.csv_dir, self.symbol_list)
+        self.data_handler = self.data_handler_cls(self.events, self.symbol_list, self.start_date, self.end_date)
         self.strategy = self.strategy_cls(self.data_handler, self.events)
         self.portfolio = self.portfolio_cls(self.data_handler, self.events, self.start_date, 
                                             self.initial_capital)
@@ -80,7 +79,7 @@ class Backtest(object):
         i = 0
         while True:
             i += 1
-            print(i)
+            #print(i)
             # Update the market bars
             if self.data_handler.continue_backtest == True:
                 self.data_handler.update_bars()

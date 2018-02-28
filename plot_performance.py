@@ -14,7 +14,7 @@ if __name__ == "__main__":
     data = pd.io.parsers.read_csv(
         "equity.csv", header=0, 
         parse_dates=True, index_col=0
-    ).sort()
+    ).sort_index()
 
     # Plot three charts: Equity curve, 
     # period returns, drawdowns
